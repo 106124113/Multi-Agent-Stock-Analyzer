@@ -1,0 +1,101 @@
+import logging
+import time
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field
+
+from agents.llm import LLMConfig, call_llm
+
+logger = logging.getLogger("bharatequity.agents")
+
+
+class AgentOutput(BaseModel):
+    agent_name: str
+    role: str
+    summary: str
+    findings: List[str] = Field(default_factory=list)
+    supporting_evidence: List[str] = Field(default_factory=list)
+    assumptions: List[str] = Field(default_factory=list)
+    missing_information: List[str] = Field(default_factory=list)
+    confidence_score: float = Field(..., ge=0.0, le=1.0, description="Normalized score 0.0 to 1.0")
+    confidence_explanation: str
+    questions_for_investigation: List[str] = Field(default_factory=list)
+    role_specific_data: Dict[str, Any] = Field(default_factory=dict)
+    execution_status: str = "success"  # success, error, dev_stub
+    execution_duration_sec: float = 0.0
+    error_message: Optional[str] = None
+
+
+class BaseAgent(ABC):
+    """Abstract Base Class for all BharatEquity research agents."""
+
+    def __init__(self, name: str, role: str):
+        self.name = name
+        self.role = role
+
+    @abstractmethod
+    def get_system_prompt(self) -> str:
+        """Return dedicated system instructions for this specialized agent role."""
+        pass
+
+    @abstractmethod
+    def get_user_prompt(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> str:
+        """Formulate execution prompt with verified evidence and context."""
+        pass
+
+    @abstractmethod
+    def get_development_stub(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> AgentOutput:
+        """Provide an explicitly labeled development stub when live LLM is unconfigured."""
+        pass
+
+    async def run(
+        self,
+        company_context: Dict[str, Any],
+        evidence: Optional[Dict[str, Any]] = None,
+        timeout_sec: float = 30.0
+    ) -> AgentOutput:
+        """Execute agent task with timing, error containment, and stub fallback."""
+        start_time = time.time()
+        evidence_dict = evidence or {}
+
+        # If LLM API is unconfigured, return explicitly labeled dev stub
+        if not LLMConfig.is_configured():
+            stub = self.get_development_stub(company_context, evidence_dict)
+            stub.execution_duration_sec = round(time.time() - start_time, 3)
+            return stub
+
+        system_prompt = self.get_system_prompt()
+        user_prompt = self.get_user_prompt(company_context, evidence_dict)
+
+        try:
+            raw_result = await call_llm(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                response_format="json"
+            )
+
+            duration = round(time.time() - start_time, 3)
+            
+            return AgentOutput(
+                agent_name=self.name,
+                role=self.role,
+                summary=raw_result.get("summary", f"{self.name} completed evaluation."),
+                findings=raw_result.get("findings", []),
+                supporting_evidence=raw_result.get("supporting_evidence", []),
+                assumptions=raw_result.get("assumptions", []),
+                missing_information=raw_result.get("missing_information", []),
+                confidence_score=float(raw_result.get("confidence_score", 0.5)),
+                confidence_explanation=raw_result.get("confidence_explanation", "Standard analysis"),
+                questions_for_investigation=raw_result.get("questions_for_investigation", []),
+                role_specific_data=raw_result.get("role_specific_data", {}),
+                execution_status="success",
+                execution_duration_sec=duration
+            )
+
+        except Exception as err:
+            logger.warning(f"Live execution failed for agent {self.name}: {err}. Falling back to analytical stub.")
+            stub = self.get_development_stub(company_context, evidence_dict)
+            stub.execution_duration_sec = round(time.time() - start_time, 3)
+            stub.execution_status = "stub_fallback"
+            stub.error_message = str(err)
+            return stub

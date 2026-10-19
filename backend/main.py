@@ -15,6 +15,7 @@ from database import (
     is_official_catalog_imported,
     search_stocks,
 )
+from agents.orchestrator import orchestrate_stock_research
 from report_generator import generate_demo_report
 from schemas import (
     HealthResponse,
@@ -124,13 +125,11 @@ def get_stock_detail(
 
 
 @app.post("/api/reports/{symbol}", response_model=ResearchReport, tags=["Reports"])
-def create_report(
+async def create_report(
     symbol: str,
     exchange: Optional[str] = Query(None, description="Optional exchange identifier (e.g., NSE or BSE)")
 ):
-    """Generate a research report for an Indian stock ticker.
-    Currently returns a clearly labeled prototype demo report.
-    """
+    """Generate a research report for an Indian stock ticker via the 13-agent deliberation loop."""
     stock = get_stock_by_symbol(symbol, exchange=exchange)
     if not stock:
         exch_desc = f" on {exchange.upper()}" if exchange else ""
@@ -139,12 +138,10 @@ def create_report(
             detail=f"Cannot generate report: Stock symbol '{symbol.upper()}'{exch_desc} is not in the catalog."
         )
 
-    report = generate_demo_report(symbol)
-    if stock and stock.get("exchange"):
-        report.exchange = stock["exchange"]
-        report.company_name = stock.get("company_name", report.company_name)
-
+    report, agent_runs = await orchestrate_stock_research(stock)
+    report.agent_runs = [r.model_dump() for r in agent_runs]
     return report
+
 
 
 @app.post("/api/catalog/import", response_model=ImportSummary, tags=["Catalog"])

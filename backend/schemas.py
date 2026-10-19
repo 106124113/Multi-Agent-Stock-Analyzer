@@ -1,6 +1,6 @@
 """Pydantic schemas for the Indian Stock Research Platform API."""
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -95,3 +95,4 @@ class ResearchReport(BaseModel):
     risks: ReportSection
     bull_vs_bear: BullBearDebate
     final_assessment: ReportSection
+    agent_runs: Optional[List[Dict[str, Any]]] = Field(default_factory=list, description="Audit manifest of all 13 specialized agent outputs")

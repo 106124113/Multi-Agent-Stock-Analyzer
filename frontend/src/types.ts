@@ -60,6 +60,23 @@ export interface BullBearDebate {
   critical_swing_factors: string[];
 }
 
+export interface AgentOutput {
+  agent_name: string;
+  role: string;
+  summary: string;
+  findings: string[];
+  supporting_evidence: string[];
+  assumptions: string[];
+  missing_information: string[];
+  confidence_score: number;
+  confidence_explanation: string;
+  questions_for_investigation: string[];
+  role_specific_data?: Record<string, any>;
+  execution_status: string;
+  execution_duration_sec: number;
+  error_message?: string;
+}
+
 export interface ResearchReport {
   report_id: string;
   symbol: string;
@@ -76,6 +93,7 @@ export interface ResearchReport {
   risks: ReportSection;
   bull_vs_bear: BullBearDebate;
   final_assessment: ReportSection;
+  agent_runs?: AgentOutput[];
 }
 
 export interface HealthResponse {

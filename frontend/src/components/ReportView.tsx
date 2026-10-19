@@ -239,6 +239,77 @@ export const ReportView: React.FC<ReportViewProps> = ({ report, onBack }) => {
           ))}
         </div>
       </div>
+
+      {/* Section 8: Multi-Agent Operations & Intelligence Audit (13 Roles) */}
+      {report.agent_runs && report.agent_runs.length > 0 && (
+        <div className="bg-[#111622] border border-slate-800 rounded-xl p-6 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 gap-2">
+            <div>
+              <h3 className="text-base font-semibold text-slate-100">Multi-Agent Deliberation Audit (13 Roles)</h3>
+              <p className="text-xs text-slate-400">Execution traces, confidence scoring, evidence citations, and identified unknowns.</p>
+            </div>
+            <span className="text-[11px] font-mono px-2.5 py-1 rounded bg-purple-500/10 text-purple-400 border border-purple-500/30 whitespace-nowrap">
+              {report.agent_runs.length} Agent Executions
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {report.agent_runs.map((agent, idx) => (
+              <div
+                key={idx}
+                className="bg-[#0b0f17] p-4 rounded-xl border border-slate-800 flex flex-col justify-between space-y-3"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <span className="font-semibold text-xs text-slate-200">{agent.agent_name}</span>
+                    <span
+                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                        agent.execution_status === 'success'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          : agent.execution_status === 'error'
+                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                          : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                      }`}
+                    >
+                      {agent.execution_status.toUpperCase()} ({agent.execution_duration_sec}s)
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-mono text-slate-500 mb-2">{agent.role}</p>
+                  <p className="text-xs text-slate-300 leading-relaxed mb-3">{agent.summary}</p>
+
+                  {/* Findings */}
+                  {agent.findings.length > 0 && (
+                    <div className="space-y-1 mb-2">
+                      <span className="text-[10px] uppercase font-mono text-slate-500 block">Key Findings:</span>
+                      <ul className="space-y-1">
+                        {agent.findings.slice(0, 2).map((f, fIdx) => (
+                          <li key={fIdx} className="text-[11px] text-slate-400 flex items-start gap-1.5">
+                            <span className="text-emerald-500 font-bold">•</span>
+                            <span>{f}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Missing information / Limitations */}
+                  {agent.missing_information.length > 0 && (
+                    <div className="text-[11px] text-amber-400/80 bg-amber-950/20 p-2 rounded border border-amber-900/30 mt-2">
+                      <strong className="block text-[10px] uppercase font-mono text-amber-300">Data Limitations:</strong>
+                      <span>{agent.missing_information[0]}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                  <span>Confidence: {(agent.confidence_score * 100).toFixed(0)}%</span>
+                  <span className="truncate max-w-[55%] text-right">{agent.confidence_explanation}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

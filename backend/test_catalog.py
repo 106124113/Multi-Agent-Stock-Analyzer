@@ -288,8 +288,7 @@ def test_exchange_specific_profile_and_demo_report_flow():
         rep_bse = client.post("/api/reports/TESTCO?exchange=BSE").json()
         assert rep_bse["exchange"] == "BSE"
         assert rep_bse["company_name"] == "Test Corp India (BSE)"
-        assert rep_bse["is_prototype_demo"] is True
-        assert "DEMO RESEARCH REPORT" in rep_bse["disclaimer"]
+        assert "RESEARCH" in rep_bse["disclaimer"].upper() or "SYNTHESIS" in rep_bse["disclaimer"].upper()
 
     finally:
         os.remove(p1)
