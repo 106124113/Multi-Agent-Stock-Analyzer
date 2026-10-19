@@ -1,0 +1,89 @@
+export interface StockSummary {
+  id?: number;
+  symbol: string;
+  company_name: string;
+  exchange: string;
+  sector?: string;
+  industry?: string;
+  isin?: string;
+  series?: string;
+  is_active: boolean;
+  is_prototype_data: boolean;
+}
+
+export interface StockDetail extends StockSummary {
+  market_cap_category?: string;
+  currency: string;
+  description?: string;
+  headquarters?: string;
+  listing_date?: string;
+  data_source: string;
+  imported_at?: string;
+}
+
+export interface StocksSearchResponse {
+  query: string;
+  exchange?: string;
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  catalog_imported: boolean;
+  message?: string;
+  items: StockSummary[];
+}
+
+export interface ImportSummary {
+  source_file: string;
+  exchange: string;
+  records_added: number;
+  records_updated: number;
+  records_skipped: number;
+  duplicates_detected: number;
+  invalid_rows: number;
+  total_processed: number;
+  timestamp: string;
+  status: string;
+  notes?: string;
+}
+
+export interface ReportSection {
+  title: string;
+  status: string;
+  summary: string;
+  key_points: string[];
+}
+
+export interface BullBearDebate {
+  bull_case: string[];
+  bear_case: string[];
+  critical_swing_factors: string[];
+}
+
+export interface ResearchReport {
+  report_id: string;
+  symbol: string;
+  company_name: string;
+  exchange: string;
+  generated_at: string;
+  status: string;
+  is_prototype_demo: boolean;
+  disclaimer: string;
+  business_overview: ReportSection;
+  financial_analysis: ReportSection;
+  growth_prospects: ReportSection;
+  valuation: ReportSection;
+  risks: ReportSection;
+  bull_vs_bear: BullBearDebate;
+  final_assessment: ReportSection;
+}
+
+export interface HealthResponse {
+  status: string;
+  service: string;
+  version: string;
+  database: string;
+  catalog_imported: boolean;
+  total_listings: number;
+  timestamp: string;
+}

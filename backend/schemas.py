@@ -1,0 +1,97 @@
+"""Pydantic schemas for the Indian Stock Research Platform API."""
+
+from typing import List, Optional
+from pydantic import BaseModel, Field
+
+
+class HealthResponse(BaseModel):
+    status: str
+    service: str
+    version: str
+    database: str
+    catalog_imported: bool = Field(False, description="Whether official exchange catalog has been imported")
+    total_listings: int = Field(0, description="Total active listings across exchanges")
+    timestamp: str
+
+
+class StockSummary(BaseModel):
+    id: Optional[int] = Field(None, description="Internal primary key")
+    symbol: str = Field(..., description="Exchange trading symbol, e.g. RELIANCE, TCS, 500325")
+    company_name: str = Field(..., description="Registered legal/trade name")
+    exchange: str = Field(..., description="Exchange, e.g. NSE / BSE")
+    sector: Optional[str] = Field(None, description="Industry sector")
+    industry: Optional[str] = Field(None, description="Industry classification")
+    isin: Optional[str] = Field(None, description="ISIN number")
+    series: Optional[str] = Field("EQ", description="Security series or group, e.g. EQ, BE, A, B")
+    is_active: bool = Field(True, description="Active listing status")
+    is_prototype_data: bool = Field(True, description="Flag indicating seed/mock dataset vs live terminal feed")
+
+
+class StockDetail(StockSummary):
+    market_cap_category: Optional[str] = Field(None, description="Large Cap, Mid Cap, Small Cap")
+    currency: str = Field("INR", description="Trading currency")
+    description: Optional[str] = Field(None, description="Brief overview of the business")
+    headquarters: Optional[str] = Field(None, description="Location of headquarters")
+    listing_date: Optional[str] = Field(None, description="Initial listing date")
+    data_source: str = Field("Prototype Seed Catalog (Mock)", description="Transparency attribution")
+    imported_at: Optional[str] = Field(None, description="Catalog import timestamp")
+
+
+class StocksSearchResponse(BaseModel):
+    query: str
+    exchange: Optional[str] = None
+    total: int
+    page: int = 1
+    page_size: int = 20
+    total_pages: int = 1
+    catalog_imported: bool = False
+    message: Optional[str] = None
+    items: List[StockSummary]
+
+
+class ImportSummary(BaseModel):
+    source_file: str
+    exchange: str
+    records_added: int
+    records_updated: int
+    records_skipped: int
+    duplicates_detected: int
+    invalid_rows: int
+    total_processed: int
+    timestamp: str
+    status: str = "success"
+    notes: Optional[str] = None
+
+
+class ReportSection(BaseModel):
+    title: str
+    status: str = Field("prototype_demo", description="demo, generated, or pending")
+    summary: str
+    key_points: List[str] = Field(default_factory=list)
+
+
+class BullBearDebate(BaseModel):
+    bull_case: List[str] = Field(default_factory=list)
+    bear_case: List[str] = Field(default_factory=list)
+    critical_swing_factors: List[str] = Field(default_factory=list)
+
+
+class ResearchReport(BaseModel):
+    report_id: str
+    symbol: str
+    company_name: str
+    exchange: str
+    generated_at: str
+    status: str = "demo"
+    is_prototype_demo: bool = True
+    disclaimer: str = (
+        "PROTOTYPE DEMO REPORT: Synthesized for development and interface validation only. "
+        "Does not constitute genuine financial advice, live metrics, or verified agent synthesis."
+    )
+    business_overview: ReportSection
+    financial_analysis: ReportSection
+    growth_prospects: ReportSection
+    valuation: ReportSection
+    risks: ReportSection
+    bull_vs_bear: BullBearDebate
+    final_assessment: ReportSection
