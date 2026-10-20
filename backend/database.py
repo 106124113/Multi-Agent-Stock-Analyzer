@@ -374,12 +374,18 @@ def search_stocks(
                 WHEN UPPER(isin) = UPPER(?) THEN 4
                 ELSE 5
             END,
-            exchange ASC,
+            CASE WHEN isin LIKE 'INE%' THEN 1 ELSE 2 END,
+            CASE WHEN exchange = 'NSE' THEN 1 ELSE 2 END,
             symbol ASC
         """
         order_params = [cleaned_q, cleaned_q, cleaned_q, cleaned_q]
     else:
-        order_clause = "ORDER BY exchange ASC, symbol ASC"
+        order_clause = """
+        ORDER BY 
+            CASE WHEN isin LIKE 'INE%' THEN 1 ELSE 2 END,
+            CASE WHEN exchange = 'NSE' THEN 1 ELSE 2 END,
+            symbol ASC
+        """
 
     query_sql = f"""
     SELECT id, symbol, company_name, exchange, sector, industry, isin, series, is_active, is_prototype_data
