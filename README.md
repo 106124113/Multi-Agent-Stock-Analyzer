@@ -1,141 +1,233 @@
-# EquiAgentic — Multi-Agent Stock Research Platform
+# EquiAgentic - Multi-Agent Stock Research Platform
 
-An institutional-grade research platform prototype for NSE/BSE-listed Indian equities. Built with a FastAPI backend, an indexed SQLite store, and a modern, responsive React + Vite + TypeScript + Tailwind CSS dark-themed frontend.
+An institutional-grade research platform for NSE & BSE Indian equities powered by an adversarial **13-agent deliberation loop**, **LangGraph** orchestration, deterministic financial math, and local/remote LLM reasoning (e.g. Qwen 2.5 Coder via Ollama).
 
 ---
 
-## Architecture Overview
+## What is EquiAgentic?
+
+EquiAgentic moves beyond simple chatbot summaries by simulating an institutional investment committee:
+- **13 Specialized Agent Roles**: Fundamentals, Growth, News/Events, Sentiment, Market Microstructure, Valuation, Risk, Trader, and Portfolio Manager.
+- **Adversarial Bull vs Bear Debate**: Isolated bull and bear researchers craft independent theses, then challenge each other in an adversarial rebuttal round.
+- **Deterministic Math Engine**: Computes Debt/Equity, Interest Coverage, ROCE-WACC spread, and PEG ratios in Python to eliminate LLM arithmetic hallucinations.
+- **7,800+ Official NSE & BSE Catalog**: Real securities database with exchange disambiguation, ISIN lookup, and scrip mapping.
+
+---
+
+## System Architecture
 
 ```text
-Multi Agent Stock Analyzer/
+EquiAgentic/
 ├── backend/
-│   ├── catalog_importer.py     # Importer engine for official NSE/BSE securities CSV & XLSX files
-│   ├── import_catalog.py       # Reusable CLI utility for batch importing exchange catalogs
-│   ├── database.py             # SQLite schema, indexing, upsert, and search logic
-│   ├── main.py                 # FastAPI REST API endpoints & CORS middleware
-│   ├── report_generator.py     # Prototype research report synthesis engine
-│   ├── schemas.py              # Pydantic v2 data models & validation schemas
-│   ├── test_catalog.py         # Pytest automated test suite (8 tests covering import & search)
-│   ├── requirements.txt        # Python dependencies (fastapi, uvicorn, pydantic, openpyxl, etc.)
-│   ├── data/                   # Sample official exchange catalog files (NSE & BSE)
-│   └── .env                    # Local backend environment configuration
+│   ├── agents/                     # LangGraph Multi-Agent Engine
+│   │   ├── orchestrator.py         # StateGraph workflow (5 stages, safe parallel state merging)
+│   │   ├── analysts.py             # 7 foundational specialist agents (Evidence, Fundamentals, etc.)
+│   │   ├── decision_makers.py      # Bull, Bear, Risk, Trader, and Portfolio Manager agents
+│   │   ├── metrics.py              # Deterministic financial ratio calculator (Debt/Equity, ROCE, PEG)
+│   │   ├── base.py                 # Abstract BaseAgent, AgentOutput schema, and error containment
+│   │   └── llm.py                  # Ollama / OpenAI API client with JSON schema enforcement
+│   ├── data_providers/             # Free Data Connectors (Zero API Keys)
+│   │   ├── aggregator.py           # Unified concurrent context enricher
+│   │   ├── yfinance_provider.py    # Live price, 50/200 DMA, 52W range, P/E, P&L, Balance Sheet
+│   │   ├── news_provider.py        # Live Google News RSS feed for Indian stocks
+│   │   └── bse_provider.py         # Official BSE corporate filings & announcements API
+│   ├── catalog_importer.py         # CSV & Excel importer for official NSE/BSE securities masters
+│   ├── import_catalog.py           # Reusable CLI utility for batch importing exchange catalogs
+│   ├── database.py                 # SQLite database connection, indexing, and search queries
+│   ├── main.py                     # FastAPI REST API endpoints
+│   ├── schemas.py                  # Pydantic v2 data models
+│   ├── test_catalog.py             # Catalog import and search test suite
+│   ├── test_agents.py              # Multi-agent LangGraph test suite
+│   ├── requirements.txt            # Python dependencies
+│   └── .env                        # Local backend configuration
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── Navbar.tsx        # Top header with dynamic API connection status
-│   │   │   ├── SearchBar.tsx     # Stock query bar with exchange filters (All, NSE, BSE)
-│   │   │   ├── StockCard.tsx     # Stock summary card with exchange badges and ISIN tags
-│   │   │   ├── StockProfile.tsx  # Exchange-specific company profile & "Generate Full Report" CTA
-│   │   │   ├── ReportView.tsx    # Multi-section research report & Bull vs Bear debate
-│   │   │   └── StateFeedback.tsx # Clean loading, error, empty & unimported catalog notice states
-│   │   ├── api.ts          # Typed HTTP client communicating with backend
-│   │   ├── types.ts        # TypeScript schemas matching backend models
-│   │   ├── App.tsx         # Main dashboard, pagination, and workflow routing
-│   │   └── index.css       # Tailwind CSS base styles & dark theme tokens
-│   ├── vite.config.ts      # Vite config with API proxy to localhost:8000
-│   └── package.json        # Frontend scripts and dependencies
-├── .env.example            # Environment variables template
-└── README.md               # Setup, catalog import instructions, and roadmap
+│   │   │   ├── Navbar.tsx          # Header with connection badge & branding
+│   │   │   ├── SearchBar.tsx       # Search by Symbol, Name, or 12-digit ISIN + Exchange filters
+│   │   │   ├── StockCard.tsx       # Summary card with exchange tags & ISIN badge
+│   │   │   ├── StockProfile.tsx    # Exchange-specific stock profile & "Generate Full Report" button
+│   │   │   ├── ReportView.tsx      # Multi-agent report view: Bull vs Bear debate & audit trail
+│   │   │   └── StateFeedback.tsx   # Loading, empty, and catalog notice states
+│   │   ├── api.ts                  # Typed Axios/Fetch client
+│   │   ├── types.ts                # TypeScript interfaces matching backend models
+│   │   ├── App.tsx                 # Main layout & view routing
+│   │   └── index.css               # Tailwind CSS styles & dark theme design system
+│   ├── vite.config.ts              # Vite server with API proxy to localhost:8000
+│   └── package.json                # Frontend dependencies
+├── .env.example                    # Environment variables template
+└── README.md                       # Documentation & setup guide
 ```
 
 ---
 
-## API Endpoints
+## Quickstart Guide (Beginner Friendly)
 
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/health` | Health check verifying API, SQLite status, and catalog import status |
-| `GET` | `/api/stocks?q=...&exchange=...&page=...&limit=...` | Search stocks by ticker, legal company name, or 12-digit ISIN with pagination and exchange filter (NSE/BSE) |
-| `GET` | `/api/stocks/{symbol}?exchange={NSE\|BSE}` | Retrieve detailed company profile for a specific exchange listing |
-| `POST` | `/api/reports/{symbol}?exchange={NSE\|BSE}` | Generate a structured demo research report for the requested stock listing |
-| `POST` | `/api/catalog/import?exchange={NSE\|BSE}` | Upload official exchange securities CSV or Excel file |
+Follow these steps to get EquiAgentic running locally on your computer.
 
----
+### Step 1: Check Prerequisites
 
-## Quickstart & Local Setup
-
-### 1. Prerequisites
-- **Python**: 3.10+ (tested on Python 3.14)
-- **Node.js**: v18+ (tested on Node v24)
-- **npm**: v9+
+Make sure you have the following installed:
+1. **Python** (version 3.10 or higher) — [Download Python](https://www.python.org/downloads/)
+2. **Node.js** (version 18 or higher) — [Download Node.js](https://nodejs.org/)
+3. **Git** — [Download Git](https://git-scm.com/)
+4. *(Optional for local AI)* **Ollama** — [Download Ollama](https://ollama.ai/)
 
 ---
 
-### 2. Backend Setup & Running Tests
-
-Open a terminal in `backend/`:
+### Step 2: Clone the Repository
 
 ```bash
-# Navigate to backend
-cd backend
-
-# Activate virtual environment
-# Windows (PowerShell):
-.\venv\Scripts\Activate.ps1
-# Linux / macOS:
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run automated tests
-pytest test_catalog.py -v
-
-# Start the FastAPI server (default: port 8000)
-uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+git clone https://github.com/piyu503/Multi-Agent-Stock-Analyzer.git
+cd Multi-Agent-Stock-Analyzer
 ```
 
 ---
 
-### 3. Importing Official NSE & BSE Catalogs
+### Step 3: Setup the Backend (Python)
 
-To import official exchange securities files into SQLite:
+1. Open a terminal and enter the `backend` folder:
+   ```bash
+   cd backend
+   ```
+
+2. Create a virtual environment:
+   ```bash
+   # Windows (PowerShell or Command Prompt):
+   python -m venv venv
+
+   # macOS / Linux:
+   python3 -m venv venv
+   ```
+
+3. Activate the virtual environment:
+   ```bash
+   # Windows PowerShell:
+   .\venv\Scripts\Activate.ps1
+
+   # Windows Command Prompt:
+   .\venv\Scripts\activate.bat
+
+   # macOS / Linux:
+   source venv/bin/activate
+   ```
+
+4. Install the required libraries:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+5. *(Optional)* Configure your LLM in `backend/.env`:
+   If you want to use local Ollama with `qwen2.5-coder:7b`:
+   ```dotenv
+   LLM_PROVIDER=ollama
+   LLM_BASE_URL=http://localhost:11434/v1
+   LLM_MODEL=qwen2.5-coder:7b
+   LLM_TEMPERATURE=0.2
+   ```
+   > **Note:** If Ollama is not running, the platform runs in **Development Mode**, returning analytical stubs and pre-calculated deterministic ratios without errors.
+
+6. Start the backend server:
+   ```bash
+   uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+   ```
+   The backend is now live at `http://127.0.0.1:8000`. You can visit `http://127.0.0.1:8000/docs` to see the interactive Swagger API documentation.
+
+---
+
+### Step 4: Setup the Frontend (React + Vite)
+
+Open a **new, separate terminal** in the project root:
+
+1. Enter the `frontend` folder:
+   ```bash
+   cd frontend
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Start the frontend development server:
+   ```bash
+   npm run dev
+   ```
+
+4. Open your browser and navigate to:
+   ```text
+   http://localhost:5173/
+   ```
+
+---
+
+## Importing the Full NSE & BSE Stock Universe
+
+EquiAgentic comes preloaded with sample securities. To import the complete official universe of 7,800+ NSE and BSE stocks:
+
+In your `backend` terminal (with virtual environment activated):
 
 ```bash
-# In backend directory with venv activated:
-
-# Ingest official NSE equity list (e.g. EQUITIES_L.csv)
+# Ingest official NSE equity list
 python import_catalog.py --file data/sample_nse_equities.csv --exchange NSE
 
-# Ingest official BSE scrip master (e.g. List of Scrip CSV or Excel)
+# Ingest official BSE scrip master
 python import_catalog.py --file data/sample_bse_equities.csv --exchange BSE
 ```
 
-**Importer guarantees:**
-- **Idempotent**: Re-running imports updates existing records without creating duplicates.
-- **Exchange Disambiguation**: Stocks with identical symbols on NSE and BSE are preserved as separate exchange-specific listings.
-- **ISIN Linking**: Common underlying companies share the same 12-digit ISIN (e.g., `INE002A01018` for Reliance Industries).
-- **Safe Fallbacks**: Missing optional columns (e.g., listing date, industry, or ISIN) are safely normalized without aborting the batch.
+**Catalog Importer Features:**
+- **Idempotent**: Safely re-run imports without creating duplicate records.
+- **Exchange Disambiguation**: Correctly identifies whether a stock is on NSE, BSE, or dual-listed.
+- **ISIN Linking**: Accurately links company profiles sharing the same 12-digit ISIN (e.g., `INE002A01018` for Reliance).
 
 ---
 
-### 4. Frontend Setup
+## Running Automated Tests
 
-In a second terminal:
+Run the backend test suite to verify data imports, search queries, and multi-agent orchestration:
 
 ```bash
-# Navigate to frontend
-cd frontend
-
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
+cd backend
+.\venv\Scripts\pytest.exe test_catalog.py test_agents.py -v
 ```
 
-Open `http://localhost:5173/` in your browser.
+All 16 unit and integration tests will run and display green checkmarks.
 
 ---
 
-## Phase 2 Deliverables Summary
+## The 13 Specialized Agent Roles
 
-- **Catalog Importer**: Built `backend/catalog_importer.py` and CLI tool `backend/import_catalog.py` supporting both CSV and Excel files.
-- **Search API Extended**: `GET /api/stocks` now supports query matching by Company Name, Ticker, or 12-digit ISIN, alongside exchange filtering (`NSE` / `BSE`) and pagination (`page`, `limit`).
-- **Disambiguated Exchange Profiles**: Profile retrieval and report endpoints disambiguate listings across exchanges using the `exchange` query parameter.
-- **Frontend Refinements**:
-  - Exchange toggle tabs: **All Exchanges**, **NSE**, and **BSE**.
-  - Distinct exchange badges (Blue for NSE, Amber for BSE) and 12-digit ISIN indicators on stock cards.
-  - Active listings count and pagination controls.
-  - Notice banner indicating whether seed data or official imported catalog is active.
-- **Automated Tests**: Comprehensive suite in `backend/test_catalog.py` verifying all 9 required test scenarios (idempotent imports, updates, missing fields, malformed files, ISIN/symbol search, exchange filters, profile disambiguation, and demo reports).
+| Stage | Role | Focus |
+| :--- | :--- | :--- |
+| **0. Planning** | **Research Manager** | Scopes investment hypotheses and coordinates dependencies. |
+| **1. Evidence** | **Evidence Verification Analyst** | Audits listing parameters, exchange series, and ISIN metadata. |
+| **1. Quality** | **Fundamentals Analyst** | Examines balance sheet durability, debt solvency, and cash conversion. |
+| **1. Growth** | **Growth & Industry Analyst** | Analyzes market expansion, domestic tailwinds, and industry catalysts. |
+| **1. Events** | **News & Corporate Events Analyst** | Scrutinizes recent BSE filings, earnings announcements, and board actions. |
+| **1. Sentiment** | **Social Sentiment Analyst** | Evaluates retail investor discussions without overriding hard metrics. |
+| **1. Market** | **Market Analyst** | Evaluates liquidity, 50/200 DMA, 52W range, and price momentum. |
+| **1. Valuation** | **Peer & Valuation Analyst** | Compares relative multiples (P/E, P/B, EV/EBITDA, PEG) vs sector peers. |
+| **2. Bull Case** | **Bull Researcher** | Constructs an independent positive thesis (isolated from Bear influence). |
+| **2. Bear Case** | **Bear Researcher** | Constructs an independent downside risk thesis (isolated from Bull influence). |
+| **3. Debate** | **Bull & Bear (Rebuttal)** | Single bounded round where Bull challenges Bear and Bear answers Bull. |
+| **4. Risk** | **Risk Analyst** | Stress-tests debt maturity, promoter pledging, and regulatory risks. |
+| **4. Execution** | **Trader Agent** | Formulates optimal accumulation pacing, entry zones, and volatility buffers. |
+| **5. Synthesis** | **Portfolio Manager** | Final institutional conviction synthesis and capital allocation decision. |
+
+---
+
+## API Reference
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/health` | Health check verifying API and SQLite status |
+| `GET` | `/api/stocks?q=...&exchange=...&page=...` | Search stocks by ticker, company name, or ISIN with filters |
+| `GET` | `/api/stocks/{symbol}?exchange={NSE\|BSE}` | Retrieve profile for a specific exchange listing |
+| `POST` | `/api/reports/{symbol}?exchange={NSE\|BSE}` | Trigger the 13-agent LangGraph research deliberation loop |
+| `POST` | `/api/catalog/import?exchange={NSE\|BSE}` | Upload official exchange CSV or Excel file |
+
+---
+
+## License & Disclaimer
+
+*Disclaimer: EquiAgentic is an educational and analytical research tool. It does not provide personal financial or investment advice. Always conduct your own due diligence before making investment decisions.*
