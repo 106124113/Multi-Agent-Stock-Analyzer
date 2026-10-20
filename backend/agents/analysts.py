@@ -128,10 +128,16 @@ class FundamentalsQualityAnalyst(BaseAgent):
         )
 
     def get_user_prompt(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> str:
+        metrics = company_context.get("calculated_metrics") or {}
+        fin = company_context.get("financials") or {}
+        market = company_context.get("market_data") or {}
         return (
-            f"Assess fundamental business quality for {company_context.get('company_name')} ({company_context.get('symbol')}). "
-            f"Industry: {company_context.get('industry') or company_context.get('sector')}. "
-            "State what fundamental criteria are necessary to assess this firm."
+            f"Assess fundamental balance sheet durability and business quality for {company_context.get('company_name')} ({company_context.get('symbol')}).\n"
+            f"Industry: {company_context.get('industry') or market.get('industry') or 'N/A'}.\n"
+            f"Financial Metrics: Debt-to-Equity: {metrics.get('debt_to_equity')}, Interest Coverage: {metrics.get('interest_coverage')}, "
+            f"ROCE vs WACC spread: {metrics.get('roce_wacc_spread')}%, EBITDA Margin: {metrics.get('ebitda_margin_pct')}%.\n"
+            f"Raw Statement Data: Total Debt: {fin.get('total_debt')}, Net Profit (PAT): {fin.get('pat')}, Operating Cash Flow (CFO): {fin.get('cfo')}, Capex: {fin.get('capex')}.\n"
+            "Evaluate solvency, cash flow durability, and capital allocation efficiency based on these verified figures."
         )
 
     def get_development_stub(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> AgentOutput:
@@ -221,7 +227,20 @@ class NewsCorporateEventsAnalyst(BaseAgent):
         )
 
     def get_user_prompt(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> str:
-        return f"Review event risks and regulatory disclosure requirements for {company_context.get('company_name')}."
+        news_list = company_context.get("recent_news") or []
+        bse_filings = company_context.get("corporate_filings") or []
+        headlines = [f"- {item.get('title')} ({item.get('source')})" for item in news_list[:5]]
+        filings = [f"- {item.get('category')}: {item.get('headline')}" for item in bse_filings[:3]]
+
+        news_text = "\n".join(headlines) if headlines else "No recent Google News headlines retrieved."
+        filings_text = "\n".join(filings) if filings else "No recent BSE regulatory filings retrieved."
+
+        return (
+            f"Review recent corporate disclosures and material events for {company_context.get('company_name')} ({company_context.get('symbol')}):\n"
+            f"Recent Media Headlines:\n{news_text}\n\n"
+            f"Official BSE Disclosures:\n{filings_text}\n\n"
+            "Identify key corporate governance risks, management catalysts, or litigation items from these disclosures."
+        )
 
     def get_development_stub(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> AgentOutput:
         sym = company_context.get("symbol")
@@ -263,7 +282,13 @@ class SocialSentimentAnalyst(BaseAgent):
         )
 
     def get_user_prompt(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> str:
-        return f"Evaluate retail vs institutional sentiment dynamics for {company_context.get('symbol')}."
+        news_list = company_context.get("recent_news") or []
+        headlines = [item.get("title") for item in news_list[:4]]
+        return (
+            f"Evaluate retail sentiment themes and market narrative for {company_context.get('symbol')}.\n"
+            f"Recent Market Discussion Topics:\n" + "\n".join([f"- {h}" for h in headlines]) + "\n"
+            "Assess whether the stock narrative is driven by retail euphoria, panic, or institutional accumulation."
+        )
 
     def get_development_stub(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> AgentOutput:
         sym = company_context.get("symbol")
@@ -304,7 +329,17 @@ class MarketAnalyst(BaseAgent):
         )
 
     def get_user_prompt(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> str:
-        return f"Evaluate liquidity profile and market microstructure for {company_context.get('symbol')} on {company_context.get('exchange')}."
+        mkt = company_context.get("market_data") or {}
+        return (
+            f"Evaluate liquidity profile, technical structure, and momentum for {company_context.get('symbol')} on {company_context.get('exchange')}.\n"
+            f"Market Metrics:\n"
+            f"- Current Market Price (CMP): INR {mkt.get('current_price')}\n"
+            f"- 52-Week Range: Low INR {mkt.get('year_low')} / High INR {mkt.get('year_high')}\n"
+            f"- Moving Averages: 50-DMA INR {mkt.get('dma_50')}, 200-DMA INR {mkt.get('dma_200')}\n"
+            f"- 30-Day Avg Volume: {mkt.get('avg_volume_30d')}\n"
+            f"- Beta: {mkt.get('beta')}\n"
+            "Assess trend strength, relative position vs 50/200 DMA, and order book absorption capability."
+        )
 
     def get_development_stub(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> AgentOutput:
         exch = company_context.get("exchange", "NSE")
@@ -341,12 +376,25 @@ class PeerValuationAnalyst(BaseAgent):
     def get_system_prompt(self) -> str:
         return (
             "You are the Peer Benchmarking & Valuation Analyst at BharatEquity. "
-            "Perform comparative multiples analysis (P/E, P/B, EV/EBITDA), cost of capital (WACC) baseline, "
-            "and historical valuation percentile evaluation. Respond strictly in JSON matching AgentOutput."
+            "Analyze price-to-earnings (P/E), EV/EBITDA, price-to-book (P/B), and margin of safety against sector norms. "
+            "Respond strictly in JSON matching AgentOutput."
         )
 
     def get_user_prompt(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> str:
-        return f"Formulate valuation framework for {company_context.get('symbol')} in {company_context.get('sector')}."
+        mkt = company_context.get("market_data") or {}
+        metrics = company_context.get("calculated_metrics") or {}
+        return (
+            f"Assess relative valuation multiples and peer positioning for {company_context.get('company_name')} ({company_context.get('symbol')}):\n"
+            f"Sector: {company_context.get('sector') or mkt.get('sector')}, Industry: {company_context.get('industry') or mkt.get('industry')}\n"
+            f"Valuation Multiples:\n"
+            f"- Trailing P/E: {mkt.get('pe_ratio')}\n"
+            f"- Price-to-Book (P/B): {mkt.get('pb_ratio')}\n"
+            f"- EV/EBITDA: {mkt.get('ev_ebitda')}\n"
+            f"- Dividend Yield: {mkt.get('dividend_yield_pct')}%\n"
+            f"- PEG Ratio: {metrics.get('peg_ratio')}\n"
+            f"- Market Cap: INR {mkt.get('market_cap')}\n"
+            "State whether current valuation provides an adequate margin of safety for long-term investors."
+        )
 
     def get_development_stub(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> AgentOutput:
         sec = company_context.get("sector") or "Peer Group"

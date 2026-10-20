@@ -60,10 +60,18 @@ class AgentGraphState(TypedDict):
 # Node 0: Research Manager & Planning Node
 async def planning_node(state: AgentGraphState) -> Dict[str, Any]:
     company = state["company_context"]
-    # Deterministic metrics calculation
-    raw_fin = company.get("financials") or {}
+
+    # Enrich with live free data sources (yfinance, Google News, BSE)
+    try:
+        from data_providers.aggregator import enrich_company_with_free_sources
+        enriched_company = await enrich_company_with_free_sources(company)
+    except Exception:
+        enriched_company = dict(company)
+
+    # Deterministic metrics calculation from enriched financials
+    raw_fin = enriched_company.get("financials") or {}
     metrics = calculate_financial_metrics(raw_fin)
-    enriched_company = dict(company, calculated_metrics=metrics)
+    enriched_company["calculated_metrics"] = metrics
 
     manager = ResearchManagerAgent()
     manager_output = await manager.run(enriched_company)
