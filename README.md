@@ -1,4 +1,4 @@
-# Indian Stock Research Platform (BharatEquity)
+# EquiAgentic — Multi-Agent Stock Research Platform
 
 An institutional-grade research platform prototype for NSE/BSE-listed Indian equities. Built with a FastAPI backend, an indexed SQLite store, and a modern, responsive React + Vite + TypeScript + Tailwind CSS dark-themed frontend.
 

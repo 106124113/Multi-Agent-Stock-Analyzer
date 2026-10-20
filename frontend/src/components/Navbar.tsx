@@ -19,7 +19,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onHomeClick, backendHealthy }) =
           <div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-slate-100 tracking-tight text-base sm:text-lg">
-                BharatEquity <span className="text-emerald-400 font-mono text-xs px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">AGENTIC RESEARCH</span>
+                EquiAgentic <span className="text-emerald-400 font-mono text-xs px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">AGENTIC RESEARCH</span>
               </span>
             </div>
             <p className="text-xs text-slate-400 hidden sm:block">NSE &amp; BSE Equity Intelligence Platform</p>
