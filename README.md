@@ -68,10 +68,10 @@ Follow these steps to get EquiAgentic running locally on your computer.
 ### Step 1: Check Prerequisites
 
 Make sure you have the following installed:
-1. **Python** (version 3.10 or higher) — [Download Python](https://www.python.org/downloads/)
-2. **Node.js** (version 18 or higher) — [Download Node.js](https://nodejs.org/)
-3. **Git** — [Download Git](https://git-scm.com/)
-4. *(Optional for local AI)* **Ollama** — [Download Ollama](https://ollama.ai/)
+1. **Python** (version 3.10 or higher): [Download Python](https://www.python.org/downloads/)
+2. **Node.js** (version 18 or higher): [Download Node.js](https://nodejs.org/)
+3. **Git**: [Download Git](https://git-scm.com/)
+4. *(Optional for local AI)* **Ollama**: [Download Ollama](https://ollama.ai/)
 
 ---
 

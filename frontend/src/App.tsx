@@ -238,7 +238,7 @@ export function App() {
                   {totalPages > 1 && (
                     <div className="pt-6 border-t border-slate-800/80 flex items-center justify-between text-xs">
                       <div className="text-slate-400 font-mono">
-                        Showing {(currentPage - 1) * 18 + 1}–{Math.min(currentPage * 18, totalMatches)} of {totalMatches} listings
+                        Showing {(currentPage - 1) * 18 + 1}-{Math.min(currentPage * 18, totalMatches)} of {totalMatches} listings
                       </div>
 
                       <div className="flex items-center gap-2">
