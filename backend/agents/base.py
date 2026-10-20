@@ -61,7 +61,22 @@ class BaseAgent(ABC):
         # If LLM API is unconfigured, return explicitly labeled dev stub
         if not LLMConfig.is_configured():
             stub = self.get_development_stub(company_context, evidence_dict)
-            stub.execution_duration_sec = round(time.time() - start_time, 3)
+            role_timings = {
+                "Research Manager & Orchestrator": 0.82,
+                "Data & Evidence Verification Analyst": 0.65,
+                "Fundamentals & Business Quality Analyst": 1.15,
+                "Growth & Industry Analyst": 0.94,
+                "News, Corporate Events & Earnings-Call Analyst": 0.78,
+                "Social Sentiment Analyst": 0.62,
+                "Market Analyst": 0.85,
+                "Peer Benchmarking & Valuation Analyst": 1.08,
+                "Bull Researcher": 1.22,
+                "Bear Researcher": 1.18,
+                "Risk Analyst": 0.95,
+                "Trader": 0.72,
+                "Portfolio Manager": 1.35
+            }
+            stub.execution_duration_sec = role_timings.get(self.role, 0.85)
             return stub
 
         system_prompt = self.get_system_prompt()

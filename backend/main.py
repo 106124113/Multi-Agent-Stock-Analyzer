@@ -143,6 +143,45 @@ async def create_report(
     return report
 
 
+@app.get("/api/reports/stream/{symbol}", tags=["Reports"])
+async def stream_report(
+    symbol: str,
+    exchange: Optional[str] = Query(None, description="Optional exchange identifier (e.g., NSE or BSE)")
+):
+    """Stream live 13-agent deliberation progress and ticks via Server-Sent Events (SSE)."""
+    import json
+    from fastapi.responses import StreamingResponse
+    from agents.orchestrator import stream_stock_research
+
+    stock = get_stock_by_symbol(symbol, exchange=exchange)
+    if not stock:
+        exch_desc = f" on {exchange.upper()}" if exchange else ""
+        raise HTTPException(
+            status_code=404,
+            detail=f"Cannot generate report: Stock symbol '{symbol.upper()}'{exch_desc} is not in the catalog."
+        )
+
+    async def event_generator():
+        try:
+            async for update in stream_stock_research(stock):
+                event_name = update.get("event", "message")
+                data_json = json.dumps(update.get("data", {}))
+                yield f"event: {event_name}\ndata: {data_json}\n\n"
+        except Exception as e:
+            error_data = json.dumps({"error": str(e)})
+            yield f"event: error\ndata: {error_data}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+
 
 @app.post("/api/catalog/import", response_model=ImportSummary, tags=["Catalog"])
 async def upload_catalog_file(

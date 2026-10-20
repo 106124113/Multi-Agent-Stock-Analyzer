@@ -58,7 +58,7 @@ class ResearchManagerAgent(BaseAgent):
                 f"What are the highest-priority capital allocation drivers for {sym} over the next 3 financial years?",
                 "Are there pending litigation or regulatory filings impacting ongoing operations?"
             ],
-            role_specific_data={"stage": "Orchestration & Agenda Formulation", "total_subagents_assigned": 12},
+            role_specific_data={"stage": "Orchestration & Agenda Formulation", "total_subagents_assigned": 13},
             execution_status="dev_stub"
         )
 

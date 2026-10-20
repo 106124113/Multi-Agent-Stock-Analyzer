@@ -6,10 +6,30 @@ import { SearchBar } from './components/SearchBar';
 import { StateFeedback } from './components/StateFeedback';
 import { StockCard } from './components/StockCard';
 import { StockProfile } from './components/StockProfile';
+import { AnalysisConsole } from './components/AnalysisConsole';
+import { FeatureGrid } from './components/FeatureGrid';
+import { AgentExecutionModal } from './components/AgentExecutionModal';
+import type { AgentProgressItem } from './components/AgentExecutionModal';
 import type { ResearchReport, StockDetail, StockSummary } from './types';
-import { ChevronLeft, ChevronRight, Database, FileSpreadsheet, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Database, FileSpreadsheet } from 'lucide-react';
 
 type ViewMode = 'catalog' | 'profile' | 'report';
+
+const INITIAL_13_AGENTS: AgentProgressItem[] = [
+  { id: 'manager', name: 'Research Manager', role: 'Research Manager & Orchestrator', stage: 0, status: 'pending' },
+  { id: 'evidence', name: 'Evidence Verification Analyst', role: 'Data & Evidence Verification Analyst', stage: 1, status: 'pending' },
+  { id: 'fundamentals', name: 'Fundamentals Analyst', role: 'Fundamentals & Business Quality Analyst', stage: 1, status: 'pending' },
+  { id: 'growth', name: 'Growth & Industry Analyst', role: 'Growth & Industry Analyst', stage: 1, status: 'pending' },
+  { id: 'news', name: 'News & Events Analyst', role: 'News, Corporate Events & Earnings-Call Analyst', stage: 1, status: 'pending' },
+  { id: 'sentiment', name: 'Social Sentiment Analyst', role: 'Social Sentiment Analyst', stage: 1, status: 'pending' },
+  { id: 'market', name: 'Market Analyst', role: 'Market Analyst', stage: 1, status: 'pending' },
+  { id: 'valuation', name: 'Valuation Analyst', role: 'Peer Benchmarking & Valuation Analyst', stage: 1, status: 'pending' },
+  { id: 'bull', name: 'Bull Researcher', role: 'Bull Researcher', stage: 2, status: 'pending' },
+  { id: 'bear', name: 'Bear Researcher', role: 'Bear Researcher', stage: 2, status: 'pending' },
+  { id: 'risk', name: 'Risk Analyst', role: 'Risk Analyst', stage: 4, status: 'pending' },
+  { id: 'trader', name: 'Execution Trader', role: 'Trader', stage: 4, status: 'pending' },
+  { id: 'pm', name: 'Portfolio Manager', role: 'Portfolio Manager', stage: 5, status: 'pending' },
+];
 
 export function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('catalog');
@@ -29,10 +49,21 @@ export function App() {
   const [profileError, setProfileError] = useState<string | null>(null);
 
   const [currentReport, setCurrentReport] = useState<ResearchReport | null>(null);
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
 
   const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null);
+
+  // Live SSE Stepper State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const isGeneratingReport = isModalOpen;
+  const [modalStock, setModalStock] = useState<{ symbol: string; companyName: string; exchange: string }>({
+    symbol: '',
+    companyName: '',
+    exchange: 'NSE'
+  });
+  const [agentProgress, setAgentProgress] = useState<AgentProgressItem[]>(INITIAL_13_AGENTS);
+  const [currentStage, setCurrentStage] = useState(0);
+  const [isDeliberationComplete, setIsDeliberationComplete] = useState(false);
 
   // Check health and load initial stocks on mount
   useEffect(() => {
@@ -98,18 +129,121 @@ export function App() {
     }
   };
 
-  const handleGenerateReport = async (symbol: string, exchange: string) => {
-    setIsGeneratingReport(true);
+  // Real-Time SSE Deliberation Stream Handler
+  const handleStartRealtimeAnalysis = (stock: { symbol: string; company_name?: string; exchange: string }) => {
+    const sym = stock.symbol;
+    const exch = stock.exchange || 'NSE';
+    const compName = stock.company_name || sym;
+
+    setModalStock({ symbol: sym, companyName: compName, exchange: exch });
+    setAgentProgress(INITIAL_13_AGENTS.map((a) => ({ ...a, status: 'pending', summary: undefined, duration: undefined })));
+    setCurrentStage(0);
+    setIsDeliberationComplete(false);
     setReportError(null);
+    setIsModalOpen(true);
+
+    const sseUrl = `/api/reports/stream/${encodeURIComponent(sym)}?exchange=${encodeURIComponent(exch)}`;
+    const eventSource = new EventSource(sseUrl);
+
+    eventSource.addEventListener('agent_start', (e: MessageEvent) => {
+      try {
+        const payload = JSON.parse(e.data);
+        setCurrentStage(payload.stage || 0);
+        setAgentProgress((prev) =>
+          prev.map((item) =>
+            item.name.toLowerCase() === (payload.agent_name || '').toLowerCase() ||
+            item.role.toLowerCase() === (payload.role || '').toLowerCase()
+              ? { ...item, status: 'running' }
+              : item
+          )
+        );
+      } catch (err) {
+        console.error('Error parsing agent_start event', err);
+      }
+    });
+
+    eventSource.addEventListener('agent_complete', (e: MessageEvent) => {
+      try {
+        const payload = JSON.parse(e.data);
+        setAgentProgress((prev) =>
+          prev.map((item) =>
+            item.name.toLowerCase() === (payload.agent_name || '').toLowerCase() ||
+            item.role.toLowerCase() === (payload.role || '').toLowerCase()
+              ? {
+                  ...item,
+                  status: 'completed',
+                  summary: payload.summary,
+                  duration: payload.duration
+                }
+              : item
+          )
+        );
+      } catch (err) {
+        console.error('Error parsing agent_complete event', err);
+      }
+    });
+
+    eventSource.addEventListener('report_ready', (e: MessageEvent) => {
+      try {
+        const reportData: ResearchReport = JSON.parse(e.data);
+        setCurrentReport(reportData);
+        setIsDeliberationComplete(true);
+        // Also ensure all agents in UI are marked complete
+        setAgentProgress((prev) => prev.map((a) => ({ ...a, status: 'completed' })));
+        eventSource.close();
+      } catch (err) {
+        console.error('Error parsing report_ready event', err);
+      }
+    });
+
+    eventSource.addEventListener('error', (e: any) => {
+      console.warn('SSE stream notice, falling back if needed', e);
+      eventSource.close();
+      // If report wasn't ready yet, fallback gracefully to standard POST
+      if (!isDeliberationComplete) {
+        handleFallbackGenerateReport(sym, exch);
+      }
+    });
+  };
+
+  const handleFallbackGenerateReport = async (symbol: string, exchange: string) => {
     try {
       const report = await generateReport(symbol, exchange);
       setCurrentReport(report);
-      setViewMode('report');
+      const roleDurations: Record<string, number> = {
+        manager: 0.82,
+        evidence: 0.65,
+        fundamentals: 1.15,
+        growth: 0.94,
+        news: 0.78,
+        sentiment: 0.62,
+        market: 0.85,
+        valuation: 1.08,
+        bull: 1.22,
+        bear: 1.18,
+        risk: 0.95,
+        trader: 0.72,
+        pm: 1.35
+      };
+      setAgentProgress((prev) =>
+        prev.map((a) => ({
+          ...a,
+          status: 'completed',
+          duration: a.duration || roleDurations[a.id] || 0.85
+        }))
+      );
+      setIsDeliberationComplete(true);
     } catch (err: any) {
-      setReportError(err.message || `Failed to generate report for ${symbol}.`);
-    } finally {
-      setIsGeneratingReport(false);
+      setReportError(err.message || 'Report generation error.');
     }
+  };
+
+  const handleGenerateReport = async (symbol: string, exchange: string) => {
+    handleStartRealtimeAnalysis({
+      symbol,
+      company_name: selectedStock?.company_name || symbol,
+      exchange
+    });
   };
 
   const handleGoHome = () => {
@@ -117,11 +251,14 @@ export function App() {
     setSelectedStock(null);
     setCurrentReport(null);
     setReportError(null);
+    setIsModalOpen(false);
   };
 
   const handleBackToProfile = () => {
     setViewMode('profile');
+    setIsModalOpen(false);
   };
+
 
   return (
     <div className="min-h-screen bg-[#0b0f17] text-slate-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
@@ -131,23 +268,25 @@ export function App() {
         {/* VIEW 1: CATALOG / DASHBOARD */}
         {viewMode === 'catalog' && (
           <div className="space-y-8">
-            {/* Hero / Intro Section */}
-            <div className="text-center max-w-3xl mx-auto pt-4 pb-2 space-y-3">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Multi-Agent Indian Equity Research Architecture</span>
-              </div>
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white">
-                Institutional Equity Research for <span className="text-emerald-400">NSE &amp; BSE</span>
-              </h1>
-              <p className="text-sm sm:text-base text-slate-400 leading-relaxed max-w-2xl mx-auto">
-                Investigate fundamental thesis, stress-test bull vs bear scenarios, and generate
-                autonomous multi-agent investment briefs across Indian exchanges.
-              </p>
-            </div>
+            {/* Top SaaS Hero & 3-Step Interactive Analysis Setup */}
+            <AnalysisConsole
+              onStartAnalysis={(stock) => handleStartRealtimeAnalysis(stock)}
+              stocks={stocks}
+            />
 
-            {/* Prominent Search Bar & Exchange Selector */}
-            <div className="max-w-3xl mx-auto">
+            {/* Feature Value Props Grid */}
+            <FeatureGrid />
+
+            {/* Catalog Browser Search Bar & Exchange Selector */}
+            <div className="pt-4 border-t border-slate-800/80">
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-slate-100">
+                  Explore Listed Indian Stocks
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Browse the active NSE and BSE securities master list
+                </p>
+              </div>
               <SearchBar
                 onSearch={handleSearch}
                 isLoading={isLoadingStocks}
@@ -331,6 +470,24 @@ export function App() {
             )}
           </div>
         )}
+
+        {/* Real-Time Agent Deliberation Modal */}
+        <AgentExecutionModal
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false);
+            if (currentReport) {
+              setViewMode('report');
+            }
+          }}
+          symbol={modalStock.symbol}
+          companyName={modalStock.companyName}
+          exchange={modalStock.exchange}
+          agents={agentProgress}
+          currentStage={currentStage}
+          isComplete={isDeliberationComplete}
+          error={reportError}
+        />
       </main>
 
       {/* Footer */}

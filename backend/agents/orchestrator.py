@@ -347,3 +347,272 @@ async def orchestrate_stock_research(company_context: Dict[str, Any]) -> Tuple[R
     )
 
     return report, all_agent_runs
+
+
+async def stream_stock_research(company_context: Dict[str, Any]):
+    """Async generator streaming step-by-step agent progress events and final report via SSE."""
+    import json
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    symbol = company_context.get("symbol", "EQUITY")
+    exchange = company_context.get("exchange", "NSE")
+    company_name = company_context.get("company_name", symbol)
+
+    # Initial state
+    state: AgentGraphState = {
+        "company_context": company_context,
+        "deterministic_metrics": {},
+        "manager_output": None,
+        "evidence_pool": {},
+        "bull_initial": None,
+        "bear_initial": None,
+        "bull_rebuttal": None,
+        "bear_rebuttal": None,
+        "risk_output": None,
+        "trader_output": None,
+        "pm_output": None,
+        "agent_runs": [],
+    }
+
+    # Yield step 0: Started
+    yield {
+        "event": "started",
+        "data": {
+            "symbol": symbol,
+            "exchange": exchange,
+            "company_name": company_name,
+            "total_agents": 13,
+            "message": "Initializing 13-agent deliberation loop..."
+        }
+    }
+
+    # Stage 0: Planning & Live Data Ingestion
+    yield {"event": "agent_start", "data": {"role": "Research Manager & Orchestrator", "agent_name": "Research Manager", "stage": 0}}
+    plan_res = await planning_node(state)
+    state["company_context"] = plan_res["company_context"]
+    state["deterministic_metrics"] = plan_res["deterministic_metrics"]
+    state["manager_output"] = plan_res["manager_output"]
+    state["agent_runs"].extend(plan_res["agent_runs"])
+    yield {
+        "event": "agent_complete",
+        "data": {
+            "role": "Research Manager & Orchestrator",
+            "agent_name": "Research Manager",
+            "stage": 0,
+            "summary": plan_res["manager_output"].summary,
+            "confidence": plan_res["manager_output"].confidence_score,
+            "duration": plan_res["manager_output"].execution_duration_sec
+        }
+    }
+
+    # Stage 1: Parallel Evidence & Foundational Specialists
+    specialists = [
+        ("Evidence Verification Analyst", "Evidence Verification Analyst"),
+        ("Fundamentals Analyst", "Fundamentals & Business Quality Analyst"),
+        ("Growth & Industry Analyst", "Growth & Industry Analyst"),
+        ("News & Events Analyst", "News, Corporate Events & Earnings-Call Analyst"),
+        ("Social Sentiment Analyst", "Social Sentiment Analyst"),
+        ("Market Analyst", "Market Analyst"),
+        ("Valuation Analyst", "Peer Benchmarking & Valuation Analyst")
+    ]
+    for agent_name, role_name in specialists:
+        yield {"event": "agent_start", "data": {"role": role_name, "agent_name": agent_name, "stage": 1}}
+
+    foundational_res = await foundational_analysts_node(state)
+    state["evidence_pool"] = foundational_res["evidence_pool"]
+    state["agent_runs"].extend(foundational_res["agent_runs"])
+
+    for agent_out in foundational_res["agent_runs"]:
+        yield {
+            "event": "agent_complete",
+            "data": {
+                "role": agent_out.role,
+                "agent_name": agent_out.agent_name,
+                "stage": 1,
+                "summary": agent_out.summary,
+                "confidence": agent_out.confidence_score,
+                "duration": agent_out.execution_duration_sec
+            }
+        }
+
+    # Stage 2: Independent Theses & Stage 3: Adversarial Rebuttal (Bull & Bear)
+    yield {"event": "agent_start", "data": {"role": "Bull Researcher", "agent_name": "Bull Researcher", "stage": 2}}
+    yield {"event": "agent_start", "data": {"role": "Bear Researcher", "agent_name": "Bear Researcher", "stage": 2}}
+
+    bull_res, bear_res = await asyncio.gather(
+        bull_thesis_node(state),
+        bear_thesis_node(state)
+    )
+    state["bull_initial"] = bull_res["bull_initial"]
+    state["bear_initial"] = bear_res["bear_initial"]
+    state["agent_runs"].extend(bull_res["agent_runs"] + bear_res["agent_runs"])
+
+    # Stage 3: Adversarial Rebuttal Round
+    rebuttal_res = await debate_rebuttal_node(state)
+    state["bull_rebuttal"] = rebuttal_res["bull_rebuttal"]
+    state["bear_rebuttal"] = rebuttal_res["bear_rebuttal"]
+    state["agent_runs"].extend(rebuttal_res["agent_runs"])
+
+    bull_total_dur = round(bull_res["bull_initial"].execution_duration_sec + rebuttal_res["bull_rebuttal"].execution_duration_sec, 2)
+    bear_total_dur = round(bear_res["bear_initial"].execution_duration_sec + rebuttal_res["bear_rebuttal"].execution_duration_sec, 2)
+
+    yield {
+        "event": "agent_complete",
+        "data": {
+            "role": "Bull Researcher",
+            "agent_name": "Bull Researcher",
+            "stage": 3,
+            "summary": f"Formulated bull case & defended in adversarial rebuttal: {bull_res['bull_initial'].summary}",
+            "confidence": bull_res["bull_initial"].confidence_score,
+            "duration": bull_total_dur
+        }
+    }
+    yield {
+        "event": "agent_complete",
+        "data": {
+            "role": "Bear Researcher",
+            "agent_name": "Bear Researcher",
+            "stage": 3,
+            "summary": f"Formulated bear case & challenged thesis in rebuttal: {bear_res['bear_initial'].summary}",
+            "confidence": bear_res["bear_initial"].confidence_score,
+            "duration": bear_total_dur
+        }
+    }
+
+    # Stage 4: Risk & Execution
+    yield {"event": "agent_start", "data": {"role": "Risk Analyst", "agent_name": "Risk Analyst", "stage": 4}}
+    yield {"event": "agent_start", "data": {"role": "Trader", "agent_name": "Execution Trader", "stage": 4}}
+
+    risk_exec_res = await risk_and_execution_node(state)
+    state["trader_output"] = risk_exec_res["trader_output"]
+    state["risk_output"] = risk_exec_res["risk_output"]
+    state["agent_runs"].extend(risk_exec_res["agent_runs"])
+
+    yield {
+        "event": "agent_complete",
+        "data": {
+            "role": "Risk Analyst",
+            "agent_name": "Risk Analyst",
+            "stage": 4,
+            "summary": risk_exec_res["risk_output"].summary,
+            "confidence": risk_exec_res["risk_output"].confidence_score,
+            "duration": risk_exec_res["risk_output"].execution_duration_sec
+        }
+    }
+    yield {
+        "event": "agent_complete",
+        "data": {
+            "role": "Trader",
+            "agent_name": "Execution Trader",
+            "stage": 4,
+            "summary": risk_exec_res["trader_output"].summary,
+            "confidence": risk_exec_res["trader_output"].confidence_score,
+            "duration": risk_exec_res["trader_output"].execution_duration_sec
+        }
+    }
+
+    # Stage 5: Portfolio Manager Synthesis
+    yield {"event": "agent_start", "data": {"role": "Portfolio Manager", "agent_name": "Portfolio Manager", "stage": 5}}
+    pm_res = await pm_synthesis_node(state)
+    state["pm_output"] = pm_res["pm_output"]
+    state["agent_runs"].extend(pm_res["agent_runs"])
+
+    yield {
+        "event": "agent_complete",
+        "data": {
+            "role": "Portfolio Manager",
+            "agent_name": "Portfolio Manager",
+            "stage": 5,
+            "summary": pm_res["pm_output"].summary,
+            "confidence": pm_res["pm_output"].confidence_score,
+            "duration": pm_res["pm_output"].execution_duration_sec
+        }
+    }
+
+    # Assemble final report
+    all_agent_runs = state["agent_runs"]
+    manager_output = state["manager_output"]
+    bull_initial = state["bull_initial"]
+    bear_initial = state["bear_initial"]
+    bull_reb = state["bull_rebuttal"]
+    bear_reb = state["bear_rebuttal"]
+    risk_out = state["risk_output"]
+    pm_output = state["pm_output"]
+
+    find_agent = lambda name: next((r for r in all_agent_runs if r.agent_name == name), None)
+    fundamentals_out = find_agent("Fundamentals Analyst")
+    growth_out = find_agent("Growth & Industry Analyst")
+    valuation_out = find_agent("Valuation Analyst")
+
+    bull_case = (bull_initial.findings if bull_initial else []) + (bull_reb.findings if bull_reb else [])
+    bear_case = (bear_initial.findings if bear_initial else []) + (bear_reb.findings if bear_reb else [])
+
+    debate = BullBearDebate(
+        bull_case=bull_case,
+        bear_case=bear_case,
+        critical_swing_factors=risk_out.findings if risk_out else []
+    )
+
+    is_dev_mode = any(r.execution_status == "dev_stub" for r in all_agent_runs)
+
+    final_report = ResearchReport(
+        report_id=f"AGY-{symbol.upper()}-{int(datetime.now().timestamp())}",
+        symbol=symbol.upper(),
+        company_name=company_name,
+        exchange=exchange,
+        generated_at=now_iso,
+        status="generated" if not is_dev_mode else "dev_stub",
+        is_prototype_demo=is_dev_mode,
+        disclaimer=(
+            "MULTI-AGENT RESEARCH SYNTHESIS: Generated through a LangGraph 13-agent deliberation loop "
+            "powered by Qwen 2.5 Coder 7B reasoning engine (Orchestration, Evidence Verification, Fundamentals, Growth, "
+            "Valuation, Independent Bull vs Bear Debate, Risk Audit, Execution Trader, and Portfolio Manager). "
+            "Does not constitute personal investment advice."
+            if not is_dev_mode else
+            "DEVELOPMENT STUB REPORT: Generated with explicitly labeled agent analytical stubs because live LLM_API_KEY "
+            "is not configured in backend/.env. Connect Ollama or an API key to activate live reasoning."
+        ),
+        business_overview=ReportSection(
+            title="Business Overview & Evidence Audit",
+            status="generated",
+            summary=manager_output.summary if manager_output else "",
+            key_points=manager_output.findings if manager_output else []
+        ),
+        financial_analysis=ReportSection(
+            title="Fundamentals & Balance Sheet Quality",
+            status="generated",
+            summary=fundamentals_out.summary if fundamentals_out else "Fundamentals analysis",
+            key_points=fundamentals_out.findings if fundamentals_out else []
+        ),
+        growth_prospects=ReportSection(
+            title="Growth Catalysts & Industry Position",
+            status="generated",
+            summary=growth_out.summary if growth_out else "Growth analysis",
+            key_points=growth_out.findings if growth_out else []
+        ),
+        valuation=ReportSection(
+            title="Peer Benchmarking & Valuation",
+            status="generated",
+            summary=valuation_out.summary if valuation_out else "Valuation analysis",
+            key_points=valuation_out.findings if valuation_out else []
+        ),
+        risks=ReportSection(
+            title="Systemic & Regulatory Risks",
+            status="generated",
+            summary=risk_out.summary if risk_out else "Risk analysis",
+            key_points=risk_out.findings if risk_out else []
+        ),
+        bull_vs_bear=debate,
+        final_assessment=ReportSection(
+            title="Portfolio Manager Conviction Synthesis",
+            status="generated",
+            summary=pm_output.summary if pm_output else "",
+            key_points=pm_output.findings if pm_output else []
+        ),
+        agent_runs=[r.model_dump() for r in all_agent_runs]
+    )
+
+    yield {
+        "event": "report_ready",
+        "data": final_report.model_dump()
+    }
+
