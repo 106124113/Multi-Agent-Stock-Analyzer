@@ -1,13 +1,18 @@
-"""Specialized Decision, Debate, and Synthesis Agent Roles (9-13):
-9. Bull Researcher
-10. Bear Researcher
-11. Trader
-12. Risk Analyst
-13. Portfolio Manager
+"""Decision Making Agent Roles:
+1. Bull Researcher
+2. Bear Researcher
+3. Execution Trader
+4. Risk Analyst
+5. Portfolio Manager (CIO)
 """
 
 from typing import Any, Dict, List
 from agents.base import BaseAgent, AgentOutput
+
+from backend.rag_engine import LocalRAGEngine
+
+# Initialize local ChromaDB RAG engine instance
+rag_engine = LocalRAGEngine()
 
 
 class BullResearcherAgent(BaseAgent):
@@ -20,21 +25,33 @@ class BullResearcherAgent(BaseAgent):
         return (
             "You are the Bull Researcher at BharatEquity. "
             "Your objective is to identify asymmetric upside potential, competitive advantages (economic moats), "
-            "operating leverage, and expansion catalysts. You argue rigorously based on fundamental evidence. "
+            "operating leverage, and expansion catalysts based on financial evidence and vector store filings. "
             "Never fabricate numbers. Respond strictly in JSON matching AgentOutput."
         )
 
     def get_user_prompt(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> str:
+        symbol = company_context.get("symbol", "")
         bear_case = evidence.get("bear_thesis")
+
+        # RAG Query for moats, expansion plans, and pricing power
+        rag_snippets = rag_engine.query_docs(
+            ticker=symbol,
+            query_text="competitive advantage economic moat market leadership capacity expansion pricing power revenue growth catalysts",
+            n_results=2
+        )
+        rag_text = "\n---\n".join(rag_snippets) if rag_snippets else "No local annual report or filing snippets retrieved from vector store."
+
         if bear_case:
             return (
                 f"REBUTTAL STAGE: Formulate counter-arguments for {company_context.get('company_name')} "
-                f"({company_context.get('symbol')}) against this Bear Case:\n{bear_case}\n"
+                f"({symbol}) against this Bear Case:\n{bear_case}\n\n"
+                f"[LOCAL VECTOR STORE / BULLISH RAG EVIDENCE]:\n{rag_text}\n\n"
                 "Provide evidence-backed rebuttals defending the long-term compounding thesis."
             )
         return (
             f"INITIAL THESIS: Formulate the independent Bull Thesis for {company_context.get('company_name')} "
-            f"({company_context.get('symbol')}), sector: {company_context.get('sector')}. "
+            f"({symbol}), sector: {company_context.get('sector')}.\n\n"
+            f"[LOCAL VECTOR STORE / BULLISH RAG EVIDENCE]:\n{rag_text}\n\n"
             "Detail the moat, revenue catalysts, and margin expansion potential."
         )
 
@@ -47,7 +64,7 @@ class BullResearcherAgent(BaseAgent):
         findings = [
             f"Competitive Moat: {name} benefits from strong brand recall and entrenched distribution across Indian tier-1/2/3 markets.",
             "Operating Leverage: Fixed asset turnover expansion expected as incremental demand scales without proportional capex.",
-            "Structural Tailwinds: Well positioned to capture domestic demand growth in {sec}."
+            f"Structural Tailwinds: Well positioned to capture domestic demand growth in {sec}."
         ]
         if is_rebuttal:
             findings.append("Rebuttal to Bear: Downside risks from short-term margin compression are counteracted by pricing power.")
@@ -84,21 +101,33 @@ class BearResearcherAgent(BaseAgent):
         return (
             "You are the Bear Researcher at BharatEquity. "
             "Your objective is to stress-test vulnerabilities, uncover hidden debt, analyze margin compression risks, "
-            "governance concerns, and valuation overextension. Argue rigorously based on risk factors. "
+            "governance concerns, and valuation overextension using risk filings. "
             "Never fabricate numbers. Respond strictly in JSON matching AgentOutput."
         )
 
     def get_user_prompt(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> str:
+        symbol = company_context.get("symbol", "")
         bull_case = evidence.get("bull_thesis")
+
+        # RAG Query for risks, contingent liabilities, margin pressure, and litigation
+        rag_snippets = rag_engine.query_docs(
+            ticker=symbol,
+            query_text="risk factors contingent liabilities margin compression raw material inflation debt covenants litigation competitive threats",
+            n_results=2
+        )
+        rag_text = "\n---\n".join(rag_snippets) if rag_snippets else "No local annual report risk snippets retrieved from vector store."
+
         if bull_case:
             return (
                 f"REBUTTAL STAGE: Formulate counter-arguments for {company_context.get('company_name')} "
-                f"({company_context.get('symbol')}) against this Bull Case:\n{bull_case}\n"
+                f"({symbol}) against this Bull Case:\n{bull_case}\n\n"
+                f"[LOCAL VECTOR STORE / BEARISH RAG EVIDENCE]:\n{rag_text}\n\n"
                 "Highlight execution bottlenecks, valuation risks, and competitive threats."
             )
         return (
             f"INITIAL THESIS: Formulate the independent Bear Thesis for {company_context.get('company_name')} "
-            f"({company_context.get('symbol')}), sector: {company_context.get('sector')}. "
+            f"({symbol}), sector: {company_context.get('sector')}.\n\n"
+            f"[LOCAL VECTOR STORE / BEARISH RAG EVIDENCE]:\n{rag_text}\n\n"
             "Detail structural headwinds, competitive threats, and downside scenarios."
         )
 
@@ -108,7 +137,7 @@ class BearResearcherAgent(BaseAgent):
         is_rebuttal = bool(evidence.get("bull_thesis"))
 
         findings = [
-            f"Valuation Vulnerability: Premium multiples leave zero margin of safety against potential quarterly execution slips.",
+            "Valuation Vulnerability: Premium multiples leave zero margin of safety against potential quarterly execution slips.",
             "Input Cost Exposure: Volatility in commodity inputs and wage inflation can compress operating margins unexpectedly.",
             "Disruptive Competition: Aggressive price discounting by new entrants poses market share erosion risks."
         ]
@@ -190,11 +219,25 @@ class RiskAnalystAgent(BaseAgent):
             "You are the independent Risk Analyst at BharatEquity. "
             "You operate with strict independence from the Bull and Bear debaters. "
             "Evaluate catastrophic tail risks, regulatory and legal exposure, leverage/covenant breaches, "
-            "and liquidity drawdown risk. Respond strictly in JSON matching AgentOutput."
+            "and liquidity drawdown risk using local vector store disclosures. Respond strictly in JSON matching AgentOutput."
         )
 
     def get_user_prompt(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> str:
-        return f"Perform independent risk and stress-test assessment for {company_context.get('company_name')} ({company_context.get('symbol')})."
+        symbol = company_context.get("symbol", "")
+
+        # RAG Query for regulatory and covenant litigation
+        rag_snippets = rag_engine.query_docs(
+            ticker=symbol,
+            query_text="regulatory compliance SEBI investigation tax litigation legal dispute covenant breach debt default statutory liability",
+            n_results=2
+        )
+        rag_text = "\n---\n".join(rag_snippets) if rag_snippets else "No local legal/regulatory filings retrieved from vector store."
+
+        return (
+            f"Perform independent risk and stress-test assessment for {company_context.get('company_name')} ({symbol}).\n\n"
+            f"[LOCAL VECTOR STORE / RISK & REGULATORY RAG SNIPPETS]:\n{rag_text}\n\n"
+            "Assess tail risks, debt covenants, and regulatory compliance status."
+        )
 
     def get_development_stub(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> AgentOutput:
         sym = company_context.get("symbol")
@@ -236,9 +279,20 @@ class PortfolioManagerAgent(BaseAgent):
         )
 
     def get_user_prompt(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> str:
+        symbol = company_context.get("symbol", "")
+
+        # RAG Query for overall management guidance, governance, and capital allocation
+        rag_snippets = rag_engine.query_docs(
+            ticker=symbol,
+            query_text="management outlook strategic direction capital allocation dividend policy corporate governance long term vision",
+            n_results=2
+        )
+        rag_text = "\n---\n".join(rag_snippets) if rag_snippets else "No local annual report executive summaries retrieved from vector store."
+
         return (
             f"Synthesize comprehensive investment decision for {company_context.get('company_name')} "
-            f"({company_context.get('symbol')} on {company_context.get('exchange')}). "
+            f"({symbol} on {company_context.get('exchange')}).\n\n"
+            f"[LOCAL VECTOR STORE / EXECUTIVE SUMMARY RAG SNIPPETS]:\n{rag_text}\n\n"
             f"Sub-agent findings summary:\n{evidence.get('synthesis_inputs', {})}"
         )
 

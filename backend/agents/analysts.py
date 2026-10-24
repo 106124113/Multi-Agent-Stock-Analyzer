@@ -12,6 +12,11 @@
 from typing import Any, Dict, List
 from agents.base import BaseAgent, AgentOutput
 
+from backend.rag_engine import LocalRAGEngine
+
+# Initialize local ChromaDB RAG engine instance
+rag_engine = LocalRAGEngine()
+
 
 class ResearchManagerAgent(BaseAgent):
     """Coordinates research, manages dependencies, and tracks overall analytical progress."""
@@ -78,9 +83,21 @@ class EvidenceVerificationAnalyst(BaseAgent):
         )
 
     def get_user_prompt(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> str:
+        symbol = company_context.get("symbol", "")
+        
+        # Query RAG for auditor qualifications or filing completeness
+        rag_snippets = rag_engine.query_docs(
+            ticker=symbol,
+            query_text="auditor report independent audit qualification statutory auditor notes opinion",
+            n_results=2
+        )
+        rag_text = "\n---\n".join(rag_snippets) if rag_snippets else "No local annual report or auditor filings retrieved from vector store."
+
         return (
-            f"Verify evidence for {company_context.get('company_name')} ({company_context.get('symbol')}). "
-            f"Available Data: {company_context}. Evaluate whether the company record is verified on {company_context.get('exchange')} "
+            f"Verify evidence for {company_context.get('company_name')} ({symbol}).\n"
+            f"Available Meta Data: {company_context}.\n\n"
+            f"[LOCAL VECTOR STORE / AUDITOR RAG SNIPPETS]:\n{rag_text}\n\n"
+            f"Evaluate whether the company record is verified on {company_context.get('exchange')} "
             "and identify what essential evidence is missing for a full institutional audit."
         )
 
@@ -131,13 +148,24 @@ class FundamentalsQualityAnalyst(BaseAgent):
         metrics = company_context.get("calculated_metrics") or {}
         fin = company_context.get("financials") or {}
         market = company_context.get("market_data") or {}
+        symbol = company_context.get("symbol", "")
+
+        # RAG Query for fundamental debt details, notes to accounts, and working capital
+        rag_snippets = rag_engine.query_docs(
+            ticker=symbol,
+            query_text="balance sheet debt repayment schedule contingent liabilities working capital auditor notes free cash flow capex",
+            n_results=3
+        )
+        rag_text = "\n---\n".join(rag_snippets) if rag_snippets else "No local annual report or financial PDF filings retrieved from vector store."
+
         return (
-            f"Assess fundamental balance sheet durability and business quality for {company_context.get('company_name')} ({company_context.get('symbol')}).\n"
+            f"Assess fundamental balance sheet durability and business quality for {company_context.get('company_name')} ({symbol}).\n"
             f"Industry: {company_context.get('industry') or market.get('industry') or 'N/A'}.\n"
             f"Financial Metrics: Debt-to-Equity: {metrics.get('debt_to_equity')}, Interest Coverage: {metrics.get('interest_coverage')}, "
             f"ROCE vs WACC spread: {metrics.get('roce_wacc_spread')}%, EBITDA Margin: {metrics.get('ebitda_margin_pct')}%.\n"
-            f"Raw Statement Data: Total Debt: {fin.get('total_debt')}, Net Profit (PAT): {fin.get('pat')}, Operating Cash Flow (CFO): {fin.get('cfo')}, Capex: {fin.get('capex')}.\n"
-            "Evaluate solvency, cash flow durability, and capital allocation efficiency based on these verified figures."
+            f"Raw Statement Data: Total Debt: {fin.get('total_debt')}, Net Profit (PAT): {fin.get('pat')}, Operating Cash Flow (CFO): {fin.get('cfo')}, Capex: {fin.get('capex')}.\n\n"
+            f"[LOCAL VECTOR STORE / FINANCIAL RAG SNIPPETS]:\n{rag_text}\n\n"
+            "Evaluate solvency, cash flow durability, and capital allocation efficiency based on these figures and RAG snippets."
         )
 
     def get_development_stub(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> AgentOutput:
@@ -182,9 +210,21 @@ class GrowthIndustryAnalyst(BaseAgent):
         )
 
     def get_user_prompt(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> str:
+        symbol = company_context.get("symbol", "")
+
+        # RAG Query for TAM, expansion plans, capacity additions, and management guidance
+        rag_snippets = rag_engine.query_docs(
+            ticker=symbol,
+            query_text="total addressable market expansion capacity utilization greenfield capex domestic demand market share growth guidance",
+            n_results=3
+        )
+        rag_text = "\n---\n".join(rag_snippets) if rag_snippets else "No local strategic growth filings retrieved from vector store."
+
         return (
-            f"Evaluate growth catalysts for {company_context.get('company_name')} in {company_context.get('sector')} "
-            f"under Indian macroeconomic expansion backdrop."
+            f"Evaluate growth catalysts for {company_context.get('company_name')} ({symbol}) in {company_context.get('sector')} "
+            f"under Indian macroeconomic expansion backdrop.\n\n"
+            f"[LOCAL VECTOR STORE / GROWTH & STRATEGY RAG SNIPPETS]:\n{rag_text}\n\n"
+            "Assess capacity expansion drivers, competitive positioning, and revenue growth trajectory."
         )
 
     def get_development_stub(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> AgentOutput:
@@ -229,16 +269,27 @@ class NewsCorporateEventsAnalyst(BaseAgent):
     def get_user_prompt(self, company_context: Dict[str, Any], evidence: Dict[str, Any]) -> str:
         news_list = company_context.get("recent_news") or []
         bse_filings = company_context.get("corporate_filings") or []
+        symbol = company_context.get("symbol", "")
+
         headlines = [f"- {item.get('title')} ({item.get('source')})" for item in news_list[:5]]
         filings = [f"- {item.get('category')}: {item.get('headline')}" for item in bse_filings[:3]]
 
         news_text = "\n".join(headlines) if headlines else "No recent Google News headlines retrieved."
         filings_text = "\n".join(filings) if filings else "No recent BSE regulatory filings retrieved."
 
+        # RAG Query for Earnings Call Commentary and Disclosures
+        rag_snippets = rag_engine.query_docs(
+            ticker=symbol,
+            query_text="earnings call transcript conference call management commentary outlook margin guidance raw material inflation litigations",
+            n_results=3
+        )
+        rag_text = "\n---\n".join(rag_snippets) if rag_snippets else "No local earnings call transcripts retrieved from vector store."
+
         return (
-            f"Review recent corporate disclosures and material events for {company_context.get('company_name')} ({company_context.get('symbol')}):\n"
+            f"Review recent corporate disclosures and material events for {company_context.get('company_name')} ({symbol}):\n"
             f"Recent Media Headlines:\n{news_text}\n\n"
             f"Official BSE Disclosures:\n{filings_text}\n\n"
+            f"[LOCAL VECTOR STORE / EARNINGS CALL & DISCLOSURE RAG SNIPPETS]:\n{rag_text}\n\n"
             "Identify key corporate governance risks, management catalysts, or litigation items from these disclosures."
         )
 

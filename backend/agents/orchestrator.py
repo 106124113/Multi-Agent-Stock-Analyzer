@@ -14,30 +14,67 @@ Uses Annotated[List[AgentOutput], operator.add] to guarantee safe parallel state
 import asyncio
 from datetime import datetime, timezone
 import operator
+import os
+import sys
 from typing import Annotated, Any, Dict, List, Optional, Tuple, TypedDict
 
-from langgraph.graph import END, START, StateGraph
+# ---------------------------------------------------------------------------
+# Dynamic Path Resolution (Fixes ModuleNotFoundError from any directory)
+# ---------------------------------------------------------------------------
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-from agents.analysts import (
-    EvidenceVerificationAnalyst,
-    FundamentalsQualityAnalyst,
-    GrowthIndustryAnalyst,
-    MarketAnalyst,
-    NewsCorporateEventsAnalyst,
-    PeerValuationAnalyst,
-    ResearchManagerAgent,
-    SocialSentimentAnalyst,
-)
-from agents.base import AgentOutput
-from agents.decision_makers import (
-    BearResearcherAgent,
-    BullResearcherAgent,
-    PortfolioManagerAgent,
-    RiskAnalystAgent,
-    TraderAgent,
-)
-from agents.metrics import calculate_financial_metrics
-from schemas import BullBearDebate, ReportSection, ResearchReport
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+
+from langgraph.graph import END, START, StateGraph
+from backend.rag_engine import LocalRAGEngine
+
+# Robust imports with fallback
+try:
+    from backend.agents.analysts import (
+        EvidenceVerificationAnalyst,
+        FundamentalsQualityAnalyst,
+        GrowthIndustryAnalyst,
+        MarketAnalyst,
+        NewsCorporateEventsAnalyst,
+        PeerValuationAnalyst,
+        ResearchManagerAgent,
+        SocialSentimentAnalyst,
+    )
+    from backend.agents.base import AgentOutput
+    from backend.agents.decision_makers import (
+        BearResearcherAgent,
+        BullResearcherAgent,
+        PortfolioManagerAgent,
+        RiskAnalystAgent,
+        TraderAgent,
+    )
+    from backend.agents.metrics import calculate_financial_metrics
+    from backend.schemas import BullBearDebate, ReportSection, ResearchReport
+except ImportError:
+    from analysts import (
+        EvidenceVerificationAnalyst,
+        FundamentalsQualityAnalyst,
+        GrowthIndustryAnalyst,
+        MarketAnalyst,
+        NewsCorporateEventsAnalyst,
+        PeerValuationAnalyst,
+        ResearchManagerAgent,
+        SocialSentimentAnalyst,
+    )
+    from base import AgentOutput
+    from decision_makers import (
+        BearResearcherAgent,
+        BullResearcherAgent,
+        PortfolioManagerAgent,
+        RiskAnalystAgent,
+        TraderAgent,
+    )
+    from metrics import calculate_financial_metrics
+    from schemas import BullBearDebate, ReportSection, ResearchReport
 
 
 class AgentGraphState(TypedDict):
@@ -55,7 +92,6 @@ class AgentGraphState(TypedDict):
     pm_output: Optional[AgentOutput]
     # Reducer ensures parallel agent writes are safely concatenated without overwrites
     agent_runs: Annotated[List[AgentOutput], operator.add]
-
 
 # Node 0: Research Manager & Planning Node
 async def planning_node(state: AgentGraphState) -> Dict[str, Any]:
@@ -81,7 +117,6 @@ async def planning_node(state: AgentGraphState) -> Dict[str, Any]:
         "manager_output": manager_output,
         "agent_runs": [manager_output],
     }
-
 
 # Node 1: Evidence & Foundational Specialists
 async def foundational_analysts_node(state: AgentGraphState) -> Dict[str, Any]:
@@ -616,3 +651,40 @@ async def stream_stock_research(company_context: Dict[str, Any]):
         "data": final_report.model_dump()
     }
 
+
+async def run_pipeline_for_ticker(ticker: str = "RELIANCE"):
+    print(f"\n==============================================")
+    print(f"🚀 Starting EquiAgentic Pipeline for: {ticker}")
+    print(f"==============================================\n")
+    
+    # Construct the dictionary expected by stream_stock_research
+    company_context = {
+        "symbol": ticker.upper(),
+        "exchange": "NSE",
+        "company_name": ticker.upper()
+    }
+    
+    try:
+        # Pass the dictionary argument correctly
+        async for event in stream_stock_research(company_context):
+            event_type = event.get("event")
+            data = event.get("data", {})
+            
+            if event_type == "started":
+                print(f"ℹ️ {data.get('message')}")
+            elif event_type == "agent_start":
+                print(f"⏳ [Stage {data.get('stage')}] Starting Agent: {data.get('agent_name')}")
+            elif event_type == "agent_complete":
+                print(f"✅ [Stage {data.get('stage')}] Completed Agent: {data.get('agent_name')} (Confidence: {data.get('confidence')})")
+            elif event_type == "report_ready":
+                print("\n================ FINAL REPORT READY ================")
+                print(f"Report ID: {data.get('report_id')}")
+                print(f"Status: {data.get('status')}")
+                print(f"Summary: {data.get('final_assessment', {}).get('summary')}")
+                
+        print("\n🎉 Pipeline Execution Completed Successfully!")
+    except Exception as e:
+        print(f"❌ Error during pipeline execution: {e}")
+
+if __name__ == "__main__":
+    asyncio.run(run_pipeline_for_ticker("RELIANCE"))

@@ -1,11 +1,23 @@
 """FastAPI application for Indian Stock Research Platform backend."""
 
 import os
+import sys
 from datetime import datetime, timezone
 from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+
+# ---------------------------------------------------------------------------
+# Dynamic Path Resolution (Fixes ModuleNotFoundError for backend modules)
+# ---------------------------------------------------------------------------
+BACKEND_DIR = os.path.abspath(os.path.dirname(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(BACKEND_DIR, ".."))
+
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from catalog_importer import import_catalog_file
 from database import (
